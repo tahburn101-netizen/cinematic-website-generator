@@ -244,6 +244,16 @@ def inject_scripts(html: str, brand: dict, modules_dir: Path) -> str:
   function initReveals() {{
     var els = document.querySelectorAll('.reveal-up, .reveal-left, .reveal-right, .reveal-scale');
     if (!els.length) return;
+    // Immediately reveal hero content — never wait for scroll
+    var heroSection = document.getElementById('hero-scroll-section');
+    var heroSticky  = document.querySelector('.hero-sticky');
+    var heroContent = document.querySelector('.hero-content');
+    [heroSection, heroSticky, heroContent].forEach(function(container) {{
+      if (!container) return;
+      container.querySelectorAll('.reveal-up, .reveal-left, .reveal-right, .reveal-scale')
+        .forEach(function(el) {{ el.classList.add('is-revealed'); }});
+    }});
+    // Observe remaining elements
     var io = new IntersectionObserver(function(entries) {{
       entries.forEach(function(e) {{
         if (e.isIntersecting) {{
@@ -251,8 +261,16 @@ def inject_scripts(html: str, brand: dict, modules_dir: Path) -> str:
           io.unobserve(e.target);
         }}
       }});
-    }}, {{ threshold: 0.08, rootMargin: '0px 0px -20px 0px' }});
-    els.forEach(function(el) {{ io.observe(el); }});
+    }}, {{ threshold: 0.05, rootMargin: '50px 0px 0px 0px' }});
+    els.forEach(function(el) {{
+      // Also immediately reveal anything already in viewport
+      var rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {{
+        el.classList.add('is-revealed');
+      }} else {{
+        io.observe(el);
+      }}
+    }});
   }}
   if (document.readyState === 'loading') {{
     document.addEventListener('DOMContentLoaded', initReveals);
@@ -382,32 +400,55 @@ img, video, canvas {{
 }}
 
 /* ── Reveal animations ── */
+/* Only hide elements that are BELOW the fold — hero is always visible */
 .reveal-up {{
-  opacity: 0 !important;
-  transform: translateY(40px) !important;
-  transition: opacity 0.7s ease, transform 0.7s ease !important;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
 }}
 .reveal-up.is-revealed {{
   opacity: 1 !important;
   transform: translateY(0) !important;
 }}
 .reveal-left {{
-  opacity: 0 !important;
-  transform: translateX(-40px) !important;
-  transition: opacity 0.7s ease, transform 0.7s ease !important;
+  opacity: 0;
+  transform: translateX(-30px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
 }}
 .reveal-left.is-revealed {{
   opacity: 1 !important;
   transform: translateX(0) !important;
 }}
 .reveal-right {{
-  opacity: 0 !important;
-  transform: translateX(40px) !important;
-  transition: opacity 0.7s ease, transform 0.7s ease !important;
+  opacity: 0;
+  transform: translateX(30px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
 }}
 .reveal-right.is-revealed {{
   opacity: 1 !important;
   transform: translateX(0) !important;
+}}
+/* Hero content is ALWAYS visible — never hidden by reveal animations */
+#hero-scroll-section .reveal-up,
+#hero-scroll-section .reveal-left,
+#hero-scroll-section .reveal-right,
+.hero-sticky .reveal-up,
+.hero-sticky .reveal-left,
+.hero-sticky .reveal-right,
+.hero-content .reveal-up,
+.hero-content .reveal-left,
+.hero-content .reveal-right,
+.hero-content * {{
+  opacity: 1 !important;
+  transform: none !important;
+}}
+/* Fallback: if JS fails, show everything after 1s */
+@keyframes reveal-fallback {{
+  from {{ opacity: 0; transform: translateY(20px); }}
+  to   {{ opacity: 1; transform: none; }}
+}}
+.reveal-up:not(.is-revealed) {{
+  animation: reveal-fallback 0.6s ease 1.5s forwards;
 }}
 
 /* ── Scroll progress bar ── */
