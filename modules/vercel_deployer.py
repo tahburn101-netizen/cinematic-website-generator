@@ -68,6 +68,28 @@ def create_vercel_config(output_dir: str, project_name: str):
     return config_path
 
 
+def _disable_sso_protection(project_id: str, token: str):
+    """
+    Disable Vercel SSO/deployment protection so the site is publicly accessible
+    without requiring visitors to log in to Vercel.
+    """
+    if not project_id:
+        return
+    try:
+        resp = requests.patch(
+            f"https://api.vercel.com/v9/projects/{project_id}",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"ssoProtection": None},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            print(f"[Vercel Deployer] SSO protection disabled — site is now public")
+        else:
+            print(f"[Vercel Deployer] SSO disable returned {resp.status_code}: {resp.text[:80]}")
+    except Exception as e:
+        print(f"[Vercel Deployer] SSO disable error: {e}")
+
+
 def sanitize_project_name(name: str) -> str:
     """Produce a Vercel-safe project name (lowercase, alphanumeric + hyphens)."""
     name = name.lower()
@@ -206,6 +228,20 @@ def deploy_to_vercel(output_dir: str, project_name: str) -> dict:
                 # Poll until READY and resolve permanent alias
                 print(f"[Vercel Deployer] Polling for public alias…")
                 public_url = _poll_for_public_url(url, token)
+                # Disable SSO protection so site is publicly accessible
+                try:
+                    r = requests.get(
+                        "https://api.vercel.com/v9/projects",
+                        headers={"Authorization": f"Bearer {token}"},
+                        params={"search": safe_name, "limit": 3},
+                        timeout=10,
+                    )
+                    if r.status_code == 200:
+                        projs = r.json().get("projects", [])
+                        if projs:
+                            _disable_sso_protection(projs[0]["id"], token)
+                except Exception as e:
+                    print(f"[Vercel Deployer] Could not find project for SSO disable: {e}")
                 result["success"] = True
                 result["url"] = public_url
                 print(f"[Vercel Deployer] Live public URL: {public_url}")
@@ -296,6 +332,10 @@ def _deploy_via_api(output_dir: str, project_name: str, token: str) -> dict:
 
             # Poll until READY
             public_url = _poll_deployment_ready(dep_id, dep_url, token)
+            # Disable SSO protection so site is publicly accessible
+            project_id = data.get("projectId", "")
+            if project_id:
+                _disable_sso_protection(project_id, token)
             result["success"] = True
             result["url"] = public_url
             print(f"[Vercel API] Live public URL: {public_url}")

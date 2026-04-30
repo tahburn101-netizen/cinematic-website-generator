@@ -145,8 +145,18 @@ def run_pipeline_job(job_id: str, url: str):
         emit("images", "running", "Generating AI images with Nano Banana (Gemini)…")
         try:
             from modules.image_generator import fix_images_with_nano_banana
-            img_result = fix_images_with_nano_banana(html_path, brand)
-            count = img_result.get("replaced", 0)
+            # Read the HTML, apply Nano Banana replacements, write back
+            with open(html_path, "r", encoding="utf-8") as f:
+                html_content = f.read()
+            original_html = html_content
+            new_html = fix_images_with_nano_banana(html_content, brand)
+            # Count how many image URLs were replaced
+            import re as _re
+            orig_srcs = set(_re.findall(r'src=["\']([^"\']+)["\']', original_html))
+            new_srcs  = set(_re.findall(r'src=["\']([^"\']+)["\']', new_html))
+            count = len(new_srcs - orig_srcs)
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(new_html)
             emit("images", "done",
                  f"AI images injected: {count} Nano Banana image(s)",
                  {"count": count})
